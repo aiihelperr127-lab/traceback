@@ -1,0 +1,22 @@
+# Hostinger: proxy /api → VPS (replace YOUR_VPS_IP). Required for HTTPS frontend + IP-only API.
+# If ProxyPass fails (500), Hostinger may have mod_proxy disabled — ask support or use VPS nginx.
+<IfModule mod_proxy.c>
+  ProxyPreserveHost Off
+  ProxyPass        /api http://YOUR_VPS_IP:4000/api
+  ProxyPassReverse /api http://YOUR_VPS_IP:4000/api
+</IfModule>
+
+# SPA — do not rewrite real files or /api (Apache sends /api to proxy above)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_URI} !^/api
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
