@@ -1,0 +1,23 @@
+# On VPS: expose /api on port 80 so Hostinger PHP proxy can reach you (many hosts block outbound :4000).
+# sudo nano /etc/nginx/sites-available/ctf-api-80
+# sudo ln -s ... sites-enabled/ && nginx -t && systemctl reload nginx
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    location /api {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 50M;
+    }
+
+    location / {
+        return 404;
+    }
+}

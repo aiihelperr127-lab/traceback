@@ -45,40 +45,38 @@ Restart: `pm2 restart ctf-api`
 
 ---
 
-## 2) Hostinger (frontend + proxy to IP)
+## 2) Hostinger (frontend + API via PHP proxy)
 
-Upload **`client/dist/`** (after build — see §3).
+Shared Hostinger often **does not** enable Apache `ProxyPass` → `/api` returns **404** and the app shows **Invalid response (404)**.
 
-**Apache** must proxy `/api` to the VPS (replace `YOUR_VPS_IP`):
+**Fix:** use the **PHP proxy** included in the repo (no `mod_proxy` needed).
 
-Create or edit **`.htaccess`** in the site root (same folder as `index.html`), **above** the SPA rewrite block:
+1. **VPS firewall:** allow **TCP 4000** from the internet (Hostinger’s server must reach your VPS).
+2. **Build** (§3) — `client/public/` copies into **`dist/`**:
+   - **`api-proxy.php`** — open it and set **`YOUR_VPS_IP`** to your VPS public IP.
+   - **`.htaccess`** — rewrites `/api/*` → `api-proxy.php`.
+3. Upload **everything in `dist/`** to the site root, including **`api-proxy.php`** and **`.htaccess`**.
+4. Test:
+   ```bash
+   curl -s https://traceback-ctf-csbc.sanjivaniuniversity.com/api/health
+   ```
+   → should print `{"status":"ok",...}`.
 
-```apache
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-</IfModule>
+Optional: if Hostinger **does** allow `mod_proxy`, you can use `ProxyPass` instead (see older revision); PHP proxy is the reliable default.
 
-# API on VPS IP — no API domain
-<IfModule mod_proxy.c>
-  ProxyPreserveHost Off
-  ProxyPass        /api http://YOUR_VPS_IP:4000/api
-  ProxyPassReverse /api http://YOUR_VPS_IP:4000/api
-</IfModule>
+### Proxy still fails (502 / “cannot reach backend”)
 
-# SPA (keep your existing rules below, or use repo client/public/.htaccess for non-/api routes)
-<IfModule mod_rewrite.c>
-  RewriteBase /
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_URI} !^/api
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
-</IfModule>
-```
-
-- If Hostinger returns **500** or proxy errors, **`mod_proxy` may be off** on shared hosting — open a ticket: *enable mod_proxy (or reverse proxy) for `/api` to our VPS*, or use a Hostinger **VPS** for the same Apache config.
-- After proxy works:  
-  `curl -s https://traceback-ctf-csbc.sanjivaniuniversity.com/api/health` → should match VPS health JSON.
+1. **Placeholder** — In `api-proxy.php`, `$BACKEND` must be your real IP, not `YOUR_VPS_PUBLIC_IP`.
+2. **From your PC** (replace IP):
+   ```bash
+   curl -s --connect-timeout 5 http://VPS_IP:4000/api/health
+   ```
+   If this **fails**, open port **4000** on the VPS: `sudo ufw allow 4000/tcp && sudo ufw reload`.
+3. **Hostinger blocks outbound port 4000** (common) — PHP’s curl to `:4000` never connects. **Workaround:** on the **VPS**, put **Nginx on port 80** (only API, or default_server) proxying to `127.0.0.1:4000`, then set:
+   ```php
+   $BACKEND = 'http://VPS_IP';   // port 80, path still /api/...
+   ```
+   Re-upload `api-proxy.php`. Test: `curl http://VPS_IP/api/health` from your PC.
 
 ---
 

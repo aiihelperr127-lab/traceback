@@ -1,22 +1,23 @@
-# Hostinger: proxy /api → VPS (replace YOUR_VPS_IP). Required for HTTPS frontend + IP-only API.
-# If ProxyPass fails (500), Hostinger may have mod_proxy disabled — ask support or use VPS nginx.
-<IfModule mod_proxy.c>
-  ProxyPreserveHost Off
-  ProxyPass        /api http://YOUR_VPS_IP:4000/api
-  ProxyPassReverse /api http://YOUR_VPS_IP:4000/api
-</IfModule>
-
-# SPA — do not rewrite real files or /api (Apache sends /api to proxy above)
+# 1) Apache often does NOT pass Authorization to PHP — backend then gets no Bearer token → 401.
+#    This line exposes it as $_SERVER['HTTP_AUTHORIZATION'] for api-proxy.php.
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+  RewriteCond %{HTTP:Authorization} ^(.+)$
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+</IfModule>
+
+# 2) API → PHP proxy (keep $BACKEND in api-proxy.php)
+<IfModule mod_rewrite.c>
+  RewriteCond %{REQUEST_URI} ^/api/
+  RewriteRule ^api/(.*)$ api-proxy.php?__api_path=$1 [QSA,L,B]
+</IfModule>
+
+# 3) SPA
+<IfModule mod_rewrite.c>
   RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_URI} !^/api
+  RewriteCond %{REQUEST_URI} !^/api/
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
-</IfModule>
-
-<IfModule mod_headers.c>
-  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
 </IfModule>

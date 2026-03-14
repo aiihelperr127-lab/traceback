@@ -33,6 +33,7 @@ async function request(endpoint, options = {}, retried = false) {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        'X-Auth-Token': `Bearer ${token}`,
         ...options.headers,
       },
     });
@@ -61,7 +62,7 @@ async function uploadFiles(files, retried = false) {
   try {
     res = await fetch(`${API_URL}/upload`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, 'X-Auth-Token': `Bearer ${token}` },
       body: formData,
     });
   } catch (e) {

@@ -2,7 +2,7 @@ const { auth, db } = require('../config/firebase');
 const { COLLECTIONS, ROLES } = require('shared');
 
 async function authenticate(req, res, next) {
-  const header = req.headers.authorization;
+  const header = req.headers.authorization || req.headers['x-auth-token'];
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing or malformed authorization header' });
   }
