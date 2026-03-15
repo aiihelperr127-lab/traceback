@@ -1,74 +1,53 @@
 <?php
-/**
- * Forwards /api/* to Node. $BACKEND = your VPS (e.g. http://IP:4000).
- * Authorization must be forwarded — .htaccess RewriteRule E=HTTP_AUTHORIZATION is required.
- */
-declare(strict_types=1);
+// Simple API proxy for Hostinger shared hosting
+// Forwards /api requests to VPS backend
 
-$BACKEND = 'http://187.127.130.81:4000';
+$vps_ip = '187.127.130.81'; // Your VPS IP
+$vps_port = '4000';
 
-if (strpos($BACKEND, 'YOUR_VPS') !== false) {
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['error' => 'Set $BACKEND in api-proxy.php']);
-    exit;
-}
+// Get the request path after /api
+$request_uri = $_SERVER['REQUEST_URI'];
+$api_path = preg_replace('/^.*\/api/', '', $request_uri);
 
-$path = isset($_GET['__api_path']) ? (string) $_GET['__api_path'] : '';
-$path = trim($path, '/');
-$url  = rtrim($BACKEND, '/') . '/api/' . $path;
+// Build the target URL
+$target_url = "http://{$vps_ip}:{$vps_port}/api{$api_path}";
 
-$params = $_GET;
-unset($params['__api_path']);
-if ($params !== []) {
-    $url .= '?' . http_build_query($params);
-}
+// Forward the request
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $target_url);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $_SERVER['REQUEST_METHOD']);
 
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+// Forward headers
 $headers = [];
-
-// LiteSpeed strips Authorization; X-Auth-Token is forwarded (client sends both)
-$headersToForward = ['authorization', 'x-auth-token', 'content-type', 'origin'];
-if (function_exists('getallheaders')) {
-    foreach (getallheaders() as $name => $value) {
-        $l = strtolower((string) $name);
-        if (in_array($l, $headersToForward, true) && (string) $value !== '') {
-            $headers[] = $name . ': ' . $value;
-        }
+foreach (getallheaders() as $name => $value) {
+    if (strtolower($name) !== 'host') {
+        $headers[] = "$name: $value";
     }
 }
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-$ch = curl_init($url);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HEADER         => true,
-    CURLOPT_CUSTOMREQUEST  => $method,
-    CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_TIMEOUT        => 120,
-    CURLOPT_FOLLOWLOCATION => false,
-    CURLOPT_HTTPHEADER     => $headers,
-]);
-
+// Forward body for POST/PUT/PATCH/DELETE
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
     $body = file_get_contents('php://input');
-    if ($body !== '') {
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-    }
+    if ($body !== '') curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
 }
 
-$raw = curl_exec($ch);
-if ($raw === false) {
-    http_response_code(502);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['error' => 'API proxy cannot reach backend', 'curl_error' => curl_error($ch)]);
-    exit;
+$response = curl_exec($ch);
+$err = curl_errno($ch);
+$http_code = $err ? 0 : (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+if ($err || $response === false || $http_code < 100) {
+  http_response_code(503);
+  header('Content-Type: application/json');
+  echo json_encode(['error' => 'Backend unavailable. Is the API server running on the VPS?']);
+  exit;
 }
 
-$code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-curl_close($ch);
-$respBody = substr($raw, $headerSize);
-
-http_response_code($code > 0 ? $code : 502);
-header('Content-Type: application/json; charset=utf-8');
-echo $respBody;
+http_response_code($http_code >= 100 ? $http_code : 500);
+header('Content-Type: application/json');
+echo $response;

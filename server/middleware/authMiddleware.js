@@ -22,8 +22,8 @@ async function authenticate(req, res, next) {
 
     next();
   } catch (err) {
-    // Debug: VPS serviceAccountKey.json must be the SAME Firebase project as the browser app (VITE_FIREBASE_*).
-    console.warn('[auth] verifyIdToken:', err.code || err.message);
+    // serviceAccountKey must be same Firebase project as client (VITE_FIREBASE_*)
+    console.warn('[auth] verifyIdToken failed:', err.code, err.message);
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

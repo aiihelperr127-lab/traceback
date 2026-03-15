@@ -2,9 +2,9 @@ const rateLimit = require('express-rate-limit');
 
 const isProd = process.env.NODE_ENV === 'production';
 
-/** Trust first proxy (Nginx) so rate limits use real client IP */
+/** Trust first proxy (Nginx) so rate limits work behind reverse proxy */
 function trustProxy(app) {
-  if (isProd) app.set('trust proxy', 1);
+  app.set('trust proxy', 1);
 }
 
 function parseOrigins() {

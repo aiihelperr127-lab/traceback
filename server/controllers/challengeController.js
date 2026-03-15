@@ -50,9 +50,9 @@ async function getAll(req, res, next) {
       for (const [cid, usage] of checks) { usageMap[cid] = usage; }
     }
 
-    const enriched = challenges.map((c) => {
-      const usage = usageMap[c.id];
-      const totalHints = Array.isArray(c.hints) ? c.hints.length : 0;
+    const enriched = (Array.isArray(challenges) ? challenges : []).map((c) => {
+      const usage = usageMap[c?.id];
+      const totalHints = Array.isArray(c?.hints) ? c.hints.length : 0;
       const revealed = usage ? usage.hintsRevealed : 0;
       return {
         ...c,
@@ -61,7 +61,7 @@ async function getAll(req, res, next) {
         hintsRevealed: revealed,
         totalHints,
         hasHints: totalHints > 0,
-        hintPenalty: HINT_PENALTY[c.difficulty] || 0.5,
+        hintPenalty: (c && HINT_PENALTY[c.difficulty]) ?? 0.5,
       };
     });
 
@@ -115,7 +115,7 @@ async function getById(req, res, next) {
         totalHints,
         hintUsed: revealed > 0,
         hasHints: totalHints > 0,
-        hintPenalty: HINT_PENALTY[challenge.difficulty] || 0.5,
+        hintPenalty: (challenge && HINT_PENALTY[challenge.difficulty]) ?? 0.5,
         attachments,
         solves,
       },
@@ -160,7 +160,7 @@ async function requestHint(req, res, next) {
     const result = await hintService.revealNextHint(teamId, id, userId, allHints.length);
     const visibleHints = allHints.slice(0, result.revealed);
 
-    const penalty = HINT_PENALTY[challenge.difficulty] || 0.5;
+    const penalty = (challenge && HINT_PENALTY[challenge.difficulty]) ?? 0.5;
     const response = {
       hints: visibleHints,
       hintsRevealed: result.revealed,
